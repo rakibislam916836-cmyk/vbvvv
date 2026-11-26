@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telegram Auto-Post Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0b0b0e;
+      color: #f4f4f5;
+      padding: 1.25rem;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card-box {
+      background: #141419;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 1.15rem;
+      margin-bottom: 1.25rem;
+    }
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 { font-size: 1.15rem; }
+    h2 { font-size: 1rem; margin-bottom: 0.85rem; color: #e4e4e7; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    button {
+      border: none;
+      padding: 0.52rem 0.9rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #fff;
+      background: #27272a;
+    }
+    button:hover { opacity: 0.92; }
+    .btn-send { background: #e11d48; }
+    .btn-save { background: #2563eb; }
+    .btn-auto { background: #16a34a; }
+    .btn-auto.paused { background: #52525b; }
+    .btn-del { background: #dc2626; padding: 0.42rem 0.65rem; }
+    .btn-move { background: #27272a; padding: 0.42rem 0.6rem; }
+    .btn-pin { background: #e11d48; padding: 0.42rem 0.7rem; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.85rem;
+    }
+    .field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .field label { font-size: 0.78rem; color: #a1a1aa; }
+    input {
+      background: #0e0e12;
+      border: 1px solid #2e2e36;
+      color: #fff;
+      padding: 0.55rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      width: 100%;
+    }
+    input:focus { outline: none; border-color: #e11d48; }
+
+    .row-flex { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .queue-list, .search-results { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .item {
+      display: flex;
+      gap: 0.8rem;
+      align-items: center;
+      background: #101014;
+      border: 1px solid #24242b;
+      border-radius: 10px;
+      padding: 0.65rem;
+    }
+    .item img {
+      width: 112px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 7px;
+      background: #222;
+      flex-shrink: 0;
+    }
+    .info { flex: 1; min-width: 0; }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      background: rgba(225, 29, 72, 0.2);
+      color: #fda4af;
+      padding: 2px 7px;
+      border-radius: 6px;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+    .title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta { font-size: 0.78rem; color: #a1a1aa; margin-top: 0.15rem; }
+    .item-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+    .msg {
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      background: #141419;
+      border: 1px solid #27272a;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .item img { width: 88px; height: 52px; }
+      .title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card-box top-bar">
+      <h1>Telegram Auto-Post Admin</h1>
+      <div class="actions">
+        <button id="autoBtn" class="btn-auto" onclick="toggleAuto()">Auto: ON</button>
+        <button onclick="refreshQueue()">Refresh 5</button>
+        <button class="btn-send" onclick="postNow()">Post #1 Now</button>
+      </div>
+    </div>
+
+    <div id="msg" class="msg"></div>
+
+    <!-- Admin Settings: 2 URLs, Time, Tags, Bot Token, Channel -->
+    <div class="card-box">
+      <h2>Admin Settings (URL, Time, Tag, Bot & Channel)</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label>1. Approved Domain / Referer URL</label>
+          <input type="text" id="cfgApprovedDomain" placeholder="https://approved-site.com" />
+        </div>
+        <div class="field">
+          <label>2. Website Base URL (Button Link)</label>
+          <input type="text" id="cfgWebsiteBaseUrl" placeholder="https://your-site.com" />
+        </div>
+        <div class="field">
+          <label>Post Interval (Minutes)</label>
+          <input type="number" id="cfgInterval" min="1" placeholder="30" />
+        </div>
+        <div class="field">
+          <label>Tags (comma separated, e.g. hd, asian)</label>
+          <input type="text" id="cfgTags" placeholder="Leave empty for all videos" />
+        </div>
+        <div class="field">
+          <label>Telegram Bot Token</label>
+          <input type="text" id="cfgBotToken" placeholder="123456:ABC-DEF..." />
+        </div>
+        <div class="field">
+          <label>Telegram Channel Username / ID</label>
+          <input type="text" id="cfgChannelId" placeholder="@your_channel" />
+        </div>
+      </div>
+      <div class="row-flex" style="margin-top:0.9rem;">
+        <button class="btn-save" onclick="saveSettings(false)">Save Settings</button>
+        <button onclick="saveSettings(true)">Save & Refill Queue by Tags</button>
+      </div>
+    </div>
+
+    <!-- Video Select Method 1 & Method 2 -->
+    <div class="card-box">
+      <h2>Select Specific Video (1. By ID/URL &nbsp;|&nbsp; 2. By Search)</h2>
+      <div class="row-flex" style="margin-bottom:0.85rem;">
+        <input type="text" id="pinInput" placeholder="Method 1: Paste Video ID or Link (e.g. 4521)..." style="flex:1;min-width:200px;" />
+        <button class="btn-pin" onclick="pinById()">Pin #1</button>
+      </div>
+      <div class="row-flex" style="margin-bottom:0.85rem;">
+        <input type="text" id="searchInput" placeholder="Method 2: Search video by title..." style="flex:1;min-width:200px;" />
+        <button class="btn-save" onclick="searchVideos()">Search</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <!-- Next 5 Upcoming Posts + Reorder + Cut -->
+    <div class="card-box">
+      <h2>Next 5 Upcoming Posts (Reorder & Cut)</h2>
+      <div id="queueList" class="queue-list">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    const msgEl = document.getElementById("msg");
+    const listEl = document.getElementById("queueList");
+    const searchResEl = document.getElementById("searchResults");
+    const autoBtn = document.getElementById("autoBtn");
+
+    function showMsg(text, isError = false) {
+      msgEl.style.display = "block";
+      msgEl.style.borderColor = isError ? "#dc2626" : "#22c55e";
+      msgEl.textContent = text;
+    }
+
+    function fillConfigForm(cfg) {
+      if (!cfg) return;
+      document.getElementById("cfgApprovedDomain").value = cfg.approvedDomain || "";
+      document.getElementById("cfgWebsiteBaseUrl").value = cfg.websiteBaseUrl || "";
+      document.getElementById("cfgInterval").value = cfg.intervalMinutes || 30;
+      document.getElementById("cfgTags").value = cfg.tags || "";
+      document.getElementById("cfgBotToken").value = cfg.botToken || "";
+      document.getElementById("cfgChannelId").value = cfg.channelId || "";
+    }
+
+    function renderQueue(queue) {
+      if (!queue || queue.length === 0) {
+        listEl.innerHTML = "<p>No upcoming videos in queue.</p>";
+        return;
+      }
+      listEl.innerHTML = queue.slice(0, 5).map((v, idx) => `
+        <div class="item">
+          <img src="${v.thumbnail}" alt="" onerror="this.style.display='none'">
+          <div class="info">
+            <span class="badge">#${idx + 1} Next</span>
+            <div class="title">${escapeHtml(v.title)}</div>
+            <div class="meta">${v.duration ? "⏱ " + escapeHtml(v.duration) : ""}</div>
+          </div>
+          <div class="item-btns">
+            <button class="btn-move" onclick="moveItem('${v.id}', 'up')">↑</button>
+            <button class="btn-move" onclick="moveItem('${v.id}', 'down')">↓</button>
+            <button class="btn-del" onclick="deleteItem('${v.id}')">✕</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function updateAutoBtn(isOn) {
+      autoBtn.textContent = isOn ? "Auto: ON" : "Auto: PAUSED";
+      autoBtn.className = isOn ? "btn-auto" : "btn-auto paused";
+    }
+
+    async function loadState() {
+      const res = await fetch("/api/state");
+      const data = await res.json();
+      fillConfigForm(data.config);
+      updateAutoBtn(data.autoPost);
+      renderQueue(data.queue);
+    }
+
+    async function saveSettings(refillWithTags) {
+      const payload = {
+        approvedDomain: document.getElementById("cfgApprovedDomain").value.trim(),
+        websiteBaseUrl: document.getElementById("cfgWebsiteBaseUrl").value.trim(),
+        intervalMinutes: Number(document.getElementById("cfgInterval").value) || 30,
+        tags: document.getElementById("cfgTags").value.trim(),
+        botToken: document.getElementById("cfgBotToken").value.trim(),
+        channelId: document.getElementById("cfgChannelId").value.trim(),
+        refillWithTags
+      };
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.ok) return showMsg("Error saving settings", true);
+      fillConfigForm(data.config);
+      renderQueue(data.queue);
+      showMsg(refillWithTags ? "Settings saved & queue refilled by tags!" : "Settings saved!");
+    }
+
+    async function pinById() {
+      const input = document.getElementById("pinInput").value.trim();
+      if (!input) return showMsg("Enter Video ID or Link first.", true);
+      const res = await fetch("/api/queue/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input })
+      });
+      const data = await res.json();
+      if (!data.ok) return showMsg("Error: " + data.error, true);
+      document.getElementById("pinInput").value = "";
+      renderQueue(data.queue);
+      showMsg("Pinned to #1: " + data.pinned.title);
+    }
+
+    let lastSearchItems = [];
+    async function searchVideos() {
+      const q = document.getElementById("searchInput").value.trim();
+      searchResEl.innerHTML = "<p style='color:#a1a1aa;font-size:0.85rem;'>Searching...</p>";
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!data.ok) return showMsg("Search error: " + data.error, true);
+
+      lastSearchItems = data.items || [];
+      if (!lastSearchItems.length) {
+        searchResEl.innerHTML = "<p style='color:#a1a1aa;font-size:0.85rem;'>No videos found.</p>";
+        return;
+      }
+
+      searchResEl.innerHTML = lastSearchItems.map((v, i) => `
+        <div class="item">
+          <img src="${v.thumbnail}" alt="" onerror="this.style.display='none'">
+          <div class="info">
+            <div class="title">${escapeHtml(v.title)}</div>
+            <div class="meta">${v.duration ? "⏱ " + escapeHtml(v.duration) : ""}</div>
+          </div>
+          <button class="btn-pin" onclick="selectSearchVideo(${i})">Pin #1</button>
+        </div>
+      `).join("");
+    }
+
+    async function selectSearchVideo(index) {
+      const video = lastSearchItems[index];
+      if (!video) return;
+      const res = await fetch("/api/queue/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video, asFirst: true })
+      });
+      const data = await res.json();
+      if (!data.ok) return showMsg("Error: " + data.error, true);
+      renderQueue(data.queue);
+      showMsg("Added to #1: " + data.selected.title);
+    }
+
+    async function moveItem(id, direction) {
+      const res = await fetch("/api/queue/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, direction })
+      });
+      const data = await res.json();
+      if (data.ok) renderQueue(data.queue);
+    }
+
+    async function deleteItem(id) {
+      const res = await fetch(`/api/queue/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const data = await res.json();
+      renderQueue(data.queue);
+      showMsg("Removed and replaced with a new video.");
+    }
+
+    async function refreshQueue() {
+      const res = await fetch("/api/queue/refresh", { method: "POST" });
+      const data = await res.json();
+      renderQueue(data.queue);
+      showMsg("Refreshed next 5 videos.");
+    }
+
+    async function postNow() {
+      const res = await fetch("/api/post-now", { method: "POST" });
+      const data = await res.json();
+      if (!data.ok) return showMsg("Error: " + data.error, true);
+      renderQueue(data.queue);
+      showMsg("Posted: " + data.posted.title);
+    }
+
+    async function toggleAuto() {
+      const res = await fetch("/api/toggle-auto", { method: "POST" });
+      const data = await res.json();
+      updateAutoBtn(data.autoPost);
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s || "";
+      return d.innerHTML;
+    }
+
+    loadState();
+  </script>
+</body>
+</html>
